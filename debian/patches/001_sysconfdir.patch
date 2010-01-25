@@ -1,0 +1,24 @@
+From: Paul McEnery <pmcenery@gmail.com>
+Subject: Moves configuration file to /etc/slimrat/ directory
+
+--- a/slimrat.conf
++++ b/slimrat.conf
+@@ -1,6 +1,6 @@
+ # Sample configuration file for slimrat
+ #
+-# Should reside in /etc/slimrat.conf, or ~/.slimrat/config when relying on automatic loading.
++# Should reside in /etc/slimrat/slimrat.conf, or ~/.slimrat/config when relying on automatic loading.
+ #
+ # Keys can be forced with "==", making them immutable
+ #
+--- a/src/Common.pm
++++ b/src/Common.pm
+@@ -126,7 +126,7 @@
+ 	}
+ 	
+ 	my $config = new Configuration;	
+-	foreach my $file ("/etc/slimrat.conf", $ENV{HOME}."/.slimrat/config", shift) {
++	foreach my $file ("/etc/slimrat/slimrat.conf", $ENV{HOME}."/.slimrat/config", shift) {
+ 		if ($file && -r $file) {
+ 			debug("reading config file '$file'");
+ 			$config->file_read($file);

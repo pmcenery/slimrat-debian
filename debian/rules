@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright © 2009 Paul McEnery <pmcenery@gmail.com>
+
+%:
+	dh $@
+
+# Remove the dh_auto_build and dh_auto_install step
+override_dh_auto_build:
+override_dh_auto_install:
+
+# Hook to create manpages from the perl files
+override_dh_installman:
+	rm -f debian/manpages
+	test -d debian/pod2man || mkdir debian/pod2man
+	for i in slimrat slimrat-gui; do \
+		pod2man --section=8 src/$$i > debian/pod2man/$$i.8; \
+	done
+	dh_installman -pslimrat-nox debian/pod2man/slimrat.8
+	dh_installman -pslimrat debian/pod2man/slimrat-gui.8
+
+# Symlink slimrat docdir to slimrat-nox
+override_dh_installdocs:
+	dh_installdocs -pslimrat-nox
+	dh_installdocs -pslimrat --link-doc=slimrat-nox

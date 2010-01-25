@@ -1,0 +1,11 @@
+src/Common.pm		usr/lib/slimrat
+src/Configuration.pm	usr/lib/slimrat
+src/Log.pm		usr/lib/slimrat
+src/Plugin.pm		usr/lib/slimrat
+src/plugins		usr/lib/slimrat
+src/Proxy.pm		usr/lib/slimrat
+src/Queue.pm		usr/lib/slimrat
+src/Semaphore.pm	usr/lib/slimrat
+src/Toolbox.pm		usr/lib/slimrat
+src/slimrat		usr/lib/slimrat
+slimrat.conf		etc/slimrat

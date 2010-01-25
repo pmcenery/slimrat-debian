@@ -1,0 +1,5 @@
+src/Clipboard*		usr/lib/slimrat
+src/slimrat.glade	usr/lib/slimrat
+src/slimrat-gui		usr/lib/slimrat
+debian/slimrat.desktop	usr/share/applications
+debian/slimrat.xpm	usr/share/pixmaps

@@ -1,0 +1,80 @@
+Source: slimrat
+Section: net
+Priority: extra
+Maintainer: Paul McEnery <pmcenery@gmail.com>
+Build-Depends: debhelper (>= 7.4.2~)
+Build-Depends-Indep: perl
+Standards-Version: 3.8.3
+Vcs-Git: http://github.com/pmcenery/slimrat-debian.git
+Vcs-Browser: http://github.com/pmcenery/slimrat-debian
+Homepage: http://code.google.com/p/slimrat/
+
+Package: slimrat-nox
+Architecture: all
+Depends: ${misc:Depends},
+         ${perl:Depends},
+         libwww-perl,
+         libwww-mechanize-perl,
+         libcrypt-ssleay-perl,
+         aview,
+         imagemagick,
+         tesseract-ocr
+Description: CLI application for automated downloading from file hosters
+ Provides a command-line interface for automatically downloading files
+ from hosting providers. Slimrat is also capable of captcha solving using
+ tesseract for optical character recognition. Support includes, but is
+ not limited to the following file hosters:
+ .
+    * data.hu
+    * www.depositfiles.com
+    * www.easy-share.com
+    * www.fast-load.net
+    * www.fast-share.com
+    * www.hotfile.com
+    * leteckaposta.cz
+    * www.mediafire.com
+    * www.megaupload.com
+    * odsiebie.najlepsze.net
+    * www.rapidshare.com
+    * sharebase.to
+    * uploaded.to
+    * www.youtube.com
+ .
+ This package provides the command-line user interface
+
+Package: slimrat
+Architecture: all
+Depends: slimrat-nox (= ${source:Version}),
+         ${misc:Depends},
+         ${perl:Depends},
+         libwww-perl,
+         libwww-mechanize-perl,
+         libgtk2-gladexml-perl,
+         libspiffy-perl,
+         libcrypt-ssleay-perl,
+         aview,
+         imagemagick,
+         tesseract-ocr,
+         xclip
+Description: GUI application for automated downloading from file hosters
+ Provides a graphical interface for automatically downloading files
+ from hosting providers. Slimrat is also capable of captcha solving using
+ tesseract for optical character recognition. Support includes, but is
+ not limited to the following file hosters:
+ .
+    * data.hu
+    * www.depositfiles.com
+    * www.easy-share.com
+    * www.fast-load.net
+    * www.fast-share.com
+    * www.hotfile.com
+    * leteckaposta.cz
+    * www.mediafire.com
+    * www.megaupload.com
+    * odsiebie.najlepsze.net
+    * www.rapidshare.com
+    * sharebase.to
+    * uploaded.to
+    * www.youtube.com
+ .
+ This package provides the graphical user interface
