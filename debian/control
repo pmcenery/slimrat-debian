@@ -16,6 +16,7 @@ Depends: ${misc:Depends},
          libwww-perl,
          libwww-mechanize-perl,
          libcrypt-ssleay-perl,
+         libjson-perl,
          aview,
          imagemagick,
          tesseract-ocr
