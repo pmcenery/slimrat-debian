@@ -1,3 +1,12 @@
+slimrat (1.1-1) unstable; urgency=low
+
+  * New Upstream release (Closes: #567655)
+  * debian/control:
+    - Package: slimrat-nox
+      + Add Depends: libjson-perl
+
+ -- Paul McEnery <pmcenery@gmail.com>  Tue, 02 Feb 2010 16:29:16 +0000
+
 slimrat (1.0-1) unstable; urgency=low
 
   * Initial release (Closes: #565904)
