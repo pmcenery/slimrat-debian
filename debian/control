@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: Paul McEnery <pmcenery@gmail.com>
 Build-Depends: debhelper (>= 7.4.2~)
 Build-Depends-Indep: perl
-Standards-Version: 3.8.3
+Standards-Version: 3.8.4
 Homepage: http://code.google.com/p/slimrat/
 Vcs-Git: http://github.com/pmcenery/slimrat-debian.git
 Vcs-Browser: http://github.com/pmcenery/slimrat-debian

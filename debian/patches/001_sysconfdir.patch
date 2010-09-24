@@ -1,6 +1,3 @@
-From: Paul McEnery <pmcenery@gmail.com>
-Subject: Moves configuration file to /etc/slimrat/ directory
-
 --- a/slimrat.conf
 +++ b/slimrat.conf
 @@ -1,6 +1,6 @@
