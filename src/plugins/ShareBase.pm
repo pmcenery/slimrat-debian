@@ -32,9 +32,6 @@
 #    Yunnan <www.yunnan.tk>
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -48,6 +45,7 @@ package ShareBase;
 
 # Packages
 use WWW::Mechanize;
+use URI::Escape;
 
 # Custom packages
 use Log;
@@ -69,7 +67,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -86,14 +83,14 @@ sub get_name {
 sub get_filename {
 	my $self = shift;
 
-	return $1 if ($self->{PRIMARY}->decoded_content =~ m/Download: <\/span><span[^>]*>([^<]+) <\/span>\(/);
+	return $1 if ($self->{PRIMARY}->decoded_content =~ m/<a class="a2"[^>]*>(.*?)<\/a>/);
 }
 
 # Filesize
 sub get_filesize {
 	my $self = shift;
 
-	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/Download: <\/span><span[^>]*>[^<]+ <\/span>\(([^)]+)\)<\/td>/);
+	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/<strong>([\d,BKMG]+)<\/strong>/);
 }
 
 # Check if the link is alive
@@ -104,38 +101,45 @@ sub check {
 	return -1 if(m/The download doesnt exist/);
 	return -1 if(m/Der Download existiert nicht/);
 	return -1 if(m/Upload Now !/);
-	return 1  if(m/Download Now !/);
+	return 1  if(m/Starting File-Download/);
 	return 0;
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
 	# Click the button to the secondary page
-	my ($asi) = $self->{MECH}->content() =~ m/name="asi" value="([^\"]+)">/s;	
-	my $res = $self->{MECH}->post($self->{URL}, [ 'asi' => $asi , $asi => 'Download Now !' ] );
-	die("secondary page error, ", $res->status_line) unless ($res->is_success);
+
+	$self->{MECH}->form_with_fields("free");
+	$self->{MECH}->click();
 	dump_add(data => $self->{MECH}->content());
+
+	$self->{MECH}->content() =~ m/nCountDown = (\d+?);/;
+	wait($1);
+
+	$self->{MECH}->content() =~ m/name="asi" value="([^\"]+)">/s;
+	my $req = HTTP::Request->new('POST', $self->{URL}, $headers);
+	$req->content_type('application/x-www-form-urlencoded');
+	$req->content("asi=$1&$1=".uri_escape("Download Now !"));
+	return $self->{MECH}->request($req, $data_processor);
+
 	
-	# Wait timer
-	if( $self->{MECH}->content() =~ m/Du musst noch <strong>([0-9]+)min/ ) {
-	    info("reached the download limit for free-users (300 MB)");
-	    wait(($1+1)*60);
-	    $self->reload();
-	}
-	
-	# Download URL
-	if( $self->{MECH}->uri() !~ $self->{URL} ) {
-	    my $download = $self->{MECH}->uri();
-	    return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
-	}
-	
-	die("could not match any action");
+	 Wait timer
+#    elsif( $self->{MECH}->content() =~ m/Du musst noch <strong>([0-9]+)min/ ) {
+#        info("reached the download limit for free-users (300 MB)");
+#        wait(($1+1)*60);
+#        $self->reload();
+#        return 1;
+#    }
+
+#    return;
+
 }
 
 

@@ -49,7 +49,6 @@ use File::Basename;
 
 # Custom packages
 use Toolbox;
-use Semaphore;
 use Configuration;
 
 # Export functionality
@@ -71,7 +70,7 @@ $config->set_default("dump_folder", "/tmp");
 $config->set_default("show_thread", 0);
 
 # Shared data
-my @dumps:shared; my $s_dumps:shared = new Semaphore;
+my @dumps:shared;
 my $dump_output:shared = "";
 
 # Progress length variable
@@ -296,12 +295,24 @@ sub warning {
 
 # Non-fatal error
 sub error {
+	# Check for custom-passed callstack
+	my ($confess, $strip);
+	if (ref($_[0]) eq "ARRAY") {
+		my @array = @{shift @_};
+		($confess, $strip) = @array;
+	}
+	
 	output(	colour => RED,
 			category => "error",
 			messages => \@_,
 			verbosity => 1
 	);
-	callstack(1);	# Strip "sub error"
+	
+	if (defined($confess)) {
+		callstack_confess($confess, $strip);
+	} else {
+		callstack(1);	# Strip "sub error"
+	}
 	return 0;
 }
 
@@ -500,6 +511,7 @@ sub quit() {
 sub dump_add {
 	my %information = @_;
 	return unless ($config->get("verbosity") >= 5);
+	lock(@dumps);
 	
 	# Fill some possible gaps
 	$information{data} = "" unless ($information{data});	# Replace potential undef to avoid warn()
@@ -518,18 +530,18 @@ sub dump_add {
 	$dump->{time} = time;
 	debug("adding ", $dump->{type}, " dump ", (scalar(@dumps)+1));
 	callstack(1);	# Strip "sub dump_add"
-	$s_dumps->down();
 	push @dumps, $dump;
-	$s_dumps->up();
 }
 
 # Write the dumped data
 sub dump_write() {
 	return unless ($config->get("verbosity") >= 5);
+	lock(@dumps);
 	
 	# Generate a tag and temporary folder
 	my ($sec,$min,$hour,$mday,$mon,$year) = localtime;
 	$year += 1900;
+	$mon++;
 	my $filename = "slimrat_dump_" . (sprintf "%04d-%02d-%02dT%02d-%02d-%02d",$year,$mon,$mday,$hour,$min,$sec);
 	my $tempfolder = tempdir ( $filename."_XXXXX", TMPDIR => 1 );
 	
@@ -540,12 +552,11 @@ sub dump_write() {
 	debug("dumping " . scalar(@dumps) . " file(s) to disk in temporary folder '$tempfolder'");	
 	open(INFO, ">$tempfolder/info");
 	my $counter = 1;
-	$s_dumps->down();
 	foreach my $dump (@dumps) {
 		print INFO $counter, ") ", $dump->{title}, "\n";
 		my ($sec,$min,$hour,$mday,$mon,$year) = localtime($dump->{time}); $year+=1900;
 		print INFO "\t- Created at ", (sprintf "%04d-%02d-%02d %02d:%02d:%02d",$year,$mon,$mday,$hour,$min,$sec), "\n";
-		my $filename = $counter . "." . $dump->{type};
+		my $filename =  sprintf("%04d.%s", $counter, $dump->{type});
 		print INFO "\t- Extra information: " . $dump->{extra} . "\n" if $dump->{extra};
 		print INFO "\t- Saved as: $filename\n";
 		print INFO "\n";
@@ -561,7 +572,6 @@ sub dump_write() {
 		
 		$counter++;
 	}
-	$s_dumps->up();
 	close(INFO);
 	
 	# Generate archive	

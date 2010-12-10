@@ -1,6 +1,6 @@
 # slimrat - FileFactory plugin
 #
-# Copyright (c) 2008-2009 Přemek Vyhnal
+# Copyright (c) 2008-2010 Přemek Vyhnal
 # Copyright (c) 2009 Tim Besard
 #
 # This file is part of slimrat, an open-source Perl scripted
@@ -32,9 +32,6 @@
 #    Přemek Vyhnal <premysl.vyhnal gmail com>
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -48,7 +45,7 @@ package FileFactory;
 
 # Packages
 use WWW::Mechanize;
-use HTML::Entities qw(decode_entities);
+use JSON::PP;
 
 # Custom packages
 use Log;
@@ -70,7 +67,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -87,7 +83,7 @@ sub get_name {
 sub get_filename {
 	my $self = shift;
 	
-	return $1 if ($self->{PRIMARY}->decoded_content =~ m/<span href="" class="last">(.+)<\/span>/);
+	return $1 if ($self->{PRIMARY}->decoded_content =~ m/<span class="last">(.*?)<\/span>/);
 	return 0;
 }
 
@@ -109,38 +105,84 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
-	
-	# Click the "Free Download" button
-	if ($self->{MECH}->content() =~ m/\"basicBtn\"/) {
-		my $res = $self->{MECH}->follow_link(url_regex => qr/\/dlf\//) || die("could not find primary link");
-		die("secondary page error, ", $res->status_line) unless ($res->is_success);
-		dump_add(data => $self->{MECH}->content());
-	}
-	
-	# Countdown
-	if ($self->{MECH}->content() =~ m/<span id="countdown".+?>(\d+)<\/span>/) {
-		wait($1, 0);
-	}
-	
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
+
+	dump_add(data => $self->{MECH}->content());
+
 	# No free slots
 	if ($self->{MECH}->content() =~ m/currently no free download slots/) {
-		die("no free download slots");
+		&$message_processor("no free download slots");
+		wait(60);
+		$self->reload();
+		return 1;
 	}
-	
-	# Download
-	if ($self->{MECH}->content() =~ m/\"downloadLink\"/) {
-		my $link = $self->{MECH}->find_link(url_regex => qr/\/dl\//) || die("could not find download link");
-		return $self->{MECH}->request(HTTP::Request->new(GET => $link->url), $data_processor);
+
+
+	if ($self->{MECH}->content() =~ m/<a href="(.+?)" id="downloadLinkTarget"/){
+		my $download = $1;
+		$self->{MECH}->content() =~ m/<span (?:id|class)="countdown".*?>(\d+)<\/span>/;
+		wait($1);
+		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
 	}
+
+
+
+
+	# reCaptcha
+	elsif ($self->{MECH}->content() =~ m#Recaptcha\.create\("(.*?)"#) {
+		# Download captcha
+		my $captchascript = $self->{MECH}->get("http://api.recaptcha.net/challenge?k=$1")->decoded_content;
+		my ($challenge, $server) = $captchascript =~ m#challenge\s*:\s*'(.*?)'.*server\s*:\s*'(.*?)'#s;
+		my $captcha_url = $server . 'image?c=' . $challenge;
+		debug("captcha url is ", $captcha_url);
+		my $captcha_data = $self->{MECH}->get($captcha_url)->decoded_content;
+
+		my $captcha_value = &$captcha_processor($captcha_data, "jpeg", 1);
+		$self->{MECH}->back();
+		$self->{MECH}->back();
+		
+
+		(my $check) = $self->{MECH}->content() =~ m#check:'(.+?)'#;
+
+		$self->{MECH}->post("http://filefactory.com/file/checkCaptcha.php", {
+				"recaptcha_challenge_field"=>$challenge,
+				"recaptcha_response_field"=>$captcha_value,
+				"recaptcha_shortencode_field"=>"undefined",
+				"check"=>$check				
+				});
+		dump_add(data => $self->{MECH}->content());
+		my $response = JSON::PP->new->allow_barekey->decode($self->{MECH}->content());
+		$self->{MECH}->back();
+
+
+		return 1 if ($response->{status} eq "fail"); # wrong captcha code
+
+
+		if ($response->{status} eq "ok"){
+			my $download = "http://filefactory.com".$response->{path};
+			$self->{MECH}->head($download);
+			if($self->{MECH}->is_html()){
+				$self->{MECH}->get($download);
+				return 1;
+			} else {
+				return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
+			}
+		}
+
+	}
+
 	
-	die("could not match any action");
+	
+	
+	return;
 }
+
 
 # Amount of resources
 Plugin::provide(1);

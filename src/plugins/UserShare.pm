@@ -1,6 +1,7 @@
-# slimrat - direct downloading plugin
+# slimrat - usershare.net plugin 
 #
-# Copyright (c) 2008 Přemek Vyhnal
+# Copyright (c) 2008-2009 Přemek Vyhnal
+# Copyright (c) 2009 Tim Besard
 #
 # This file is part of slimrat, an open-source Perl scripted
 # command line and GUI utility for downloading files from
@@ -28,8 +29,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 #
 # Authors:
-#    Přemek Vyhnal <premysl.vyhnal gmail com>
-#    Tim Besard <tim-dot-besard-at-gmail-dot-com>
+#    eightmillion <eightmillion-at-gmail-dot-com>
 #
 
 #
@@ -37,95 +37,79 @@
 #
 
 # Package name
-package Direct;
+package UserShare;
 
 # Extend Plugin
 @ISA = qw(Plugin);
 
 # Packages
-use LWP::UserAgent;
+use WWW::Mechanize;
 
 # Custom packages
 use Log;
-use Toolbox;
 use Configuration;
+use Toolbox;
 
 # Write nicely
 use strict;
 use warnings;
 
-
-#
-# Routines
-#
-
-# Constructor
 sub new {
-	my $self  = {};
-	$self->{CONF} = $_[1];
-	$self->{URL} = $_[2];
-	$self->{MECH} = $_[3];
-	bless($self);
-	
-	$self->{CONF}->set_default("enabled", 0);
-	if ($self->{CONF}->get("enabled")) {
-		warning("no appropriate plugin found, using 'Direct' plugin");
-	} else {
-		die("no appropriate plugin found");
-	}
-
-	eval($self->{HEAD} = $self->{MECH}->head($self->{URL}));
-	die("URL not usable") if ($!);
-
-	return $self;
+    my $self  = {};
+    $self->{CONF} = $_[1];
+    $self->{URL} = $_[2];
+    $self->{MECH} = $_[3];
+    bless($self);
+    
+    $self->{PRIMARY} = $self->fetch();
+    
+    return $self;
 }
 
-# Plugin name
 sub get_name {
-	return "Direct";
+    return "UserShare";
 }
 
-# Get filename
 sub get_filename {
-	my $self = shift;
-	
-	# Get filename through HTTP request
-	my $filename = $self->{HEAD}->filename;
-	
-	# If unsuccessfull, deduce from URL
-	$filename = ((URI->new($self->{URL})->path_segments)[-1]) unless ($filename);
-	return $filename;
+    my $self = shift;
+
+    return $1 if ($self->{PRIMARY}->decoded_content =~ /colspan=2>([^<\r\n]+)/);
 }
 
-# Filesize
 sub get_filesize {
-	my $self = shift;
-	return $self->{HEAD}->content_length;
+    my $self = shift;
+
+    return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ /Size:<\/b><\/td><td>([\d\.MbGKB\s]+)(?=\s)/);
 }
 
-# Check if the link is alive
 sub check {
-	my $self = shift;
-	
-	return 1 if ($self->{HEAD}->is_success);
-	return -1;
+    my $self = shift;
+    
+    $_ = $self->{PRIMARY}->decoded_content;
+    return -1 if(/file is either removed/);
+    return 1  if(/download_btn\.jpg/);
+    return 0;
 }
 
-# Download data
-sub get_data {
-	# Input data
-	my $self = shift;
-	my $data_processor = shift;
-	my $captcha_processor = shift;
-	my $message_processor = shift;
-	my $headers = shift;
-	
-	return $self->{MECH}->request(HTTP::Request->new(GET => $self->{URL}, $headers), $data_processor);
+sub get_data_loop  {
+    
+    my $self = shift;
+    my $data_processor = shift;
+    my $captcha_processor = shift;
+    my $message_processor = shift;
+    my $headers = shift;
+    
+    $_ = $self->{PRIMARY}->decoded_content();
+    die("could not find download link") unless ((my $download) = /<a href="([^"]+)(?="><img src="\/images\/download_btn\.jpg)/);
+    dump_add( data => $_ );
+
+    return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
+    
 }
 
-# Amount of resources
-Plugin::provide(-1);
+Plugin::register("^([^:/]+://)?([^.]+\.)?usershare.net");
+Plugin::provide(1);
 
-# Return
+
 1;
-
+__END__

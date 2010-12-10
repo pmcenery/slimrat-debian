@@ -1,6 +1,6 @@
 # slimrat - Leteckaposta plugin
 #
-# Copyright (c) 2008 Přemek Vyhnal
+# Copyright (c) 2010 Přemek Vyhnal
 # Copyright (c) 2009 Tim Besard
 #
 # This file is part of slimrat, an open-source Perl scripted
@@ -31,9 +31,6 @@
 # Authors:
 #    Přemek Vyhnal <premysl.vyhnal gmail com>
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
-#
-# Plugin details:
-##   BUILD 1
 #
 
 #
@@ -69,8 +66,9 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
+
+	$self->{URL} =~ s#leteckaposta\.cz#sharegadget.com#;
 	
 	$self->{PRIMARY} = $self->fetch();
 	
@@ -93,7 +91,7 @@ sub get_filename {
 sub get_filesize {
 	my $self = shift;
 
-	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/Velikost souboru: ([^<]+)<\/p>/);
+	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/<br \/> File size: ([^<]+)<\/p>/);
 }
 
 # Check if the link is alive
@@ -107,26 +105,27 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
 	# Download URL
 	if ($self->{MECH}->content() =~ m#href='([^']+)' class='download-link'>.+?</a>#) {
 		my $download = $1;
-		return $self->{MECH}->request(HTTP::Request->new(GET => "http://leteckaposta.cz$download"), $data_processor);
+		return $self->{MECH}->request(HTTP::Request->new(GET => "http://sharegadget.com$download", $headers), $data_processor);
 	}
 	
-	die("could not match any action");
+	return;
 }
 
 # Amount of resources
 Plugin::provide(1);
 
 # Register the plugin
-Plugin::register( "^[^/]+//(?:www.)?leteckaposta.cz");
+Plugin::register( "^[^/]+//(?:www.)?(sharegadget|leteckaposta).cz");
 
 1;

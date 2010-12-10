@@ -36,9 +36,6 @@
 #    use decoded_content with the charset addition. See the
 #    WORKAROUND tags, and see if they can be removed later on.
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -73,7 +70,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -90,14 +86,14 @@ sub get_name {
 sub get_filename {
 	my $self = shift;
 	
-	return $1 if ($self->{PRIMARY}->decoded_content(charset => "utf8") =~ m/<h1.*?>(.*?)<\/h1>/);	# WORKAROUND
+	return $1 if ($self->{PRIMARY}->decoded_content(charset => "utf8") =~ m/<h1.*?>(.*?) - (.*?)<\/h1>/);	# WORKAROUND
 }
 
 # Filesize
 sub get_filesize {
 	my $self = shift;
 	
-	return -1;
+	return readable2bytes($2) if ($self->{PRIMARY}->decoded_content(charset => "utf8") =~ m/<h1.*?>(.*?) - (.*?)<\/h1>/);	# WORKAROUND
 }
 
 # Check if the link is alive
@@ -110,17 +106,20 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	my $captcha_reader = shift;
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
-	# Fetch primary page
+	# Fetch primary page (FIXME)
 	my $res = $self->reload();
 	$self->{MECH}->update_html($res->decoded_content(charset => "utf8"));	# WORKAROUND
 
 	# Wait timer
-	if ($self->{MECH}->content() =~ m/var time = ([\d\.]+)/) {
+	if ($self->{MECH}->content() =~ m/var time = ([\d\.]+)/ and $1>0) {
 		wait($1);
 	}
 	
@@ -130,15 +129,17 @@ sub get_data {
 		die("secondary page error, ", $res->status_line) unless ($res->is_success);
 		$self->{MECH}->update_html($res->decoded_content(charset => "utf8"));	# WORKAROUND
 		dump_add(data => $self->{MECH}->content());
+		return 1;
 	}
 	
 	# Click the final Download button
-	if ($self->{MECH}->content() =~ m/value=\"Download\"/ && $self->{MECH}->form_with_fields("section", "did")) {
+	elsif ($self->{MECH}->content() =~ m/value=\"Download\"/ && $self->{MECH}->form_with_fields("section", "did")) {
 		my $request = $self->{MECH}->{form}->make_request;
+		$request->header($headers);
 		return $self->{MECH}->request($request, $data_processor);
 	}
 	
-	die("could not match any action");
+	return;
 }
 
 # Amount of resources

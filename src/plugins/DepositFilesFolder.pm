@@ -32,9 +32,6 @@
 #    Přemek Vyhnal <premysl.vyhnal gmail com> 
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -69,13 +66,13 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
+	bless($self);
 	
 	die("plugin not finished yet");
 
 	# Fetch the language switch page which gives us a "lang_current=en" cookie
 	$self->{MECH}->get('http://depositfiles.com/en/switch_lang.php?lang=en');
 
-	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
 	
@@ -100,19 +97,20 @@ sub check { return 1; # not implemented
 }
 
 # Download data
-sub get_data {
+sub get_data_loop {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
 	$_ = $self->{MECH}->content();
-
-
 	while(m#<a href="(http://depositfiles\.com/files/.+?)" title=".+?" target="_blank">.+?</a>#g){
 		print "--> $1\n";
 	}
+	
+	return;
 }
 
 

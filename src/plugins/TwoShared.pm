@@ -1,6 +1,6 @@
-# slimrat - OdSiebie plugin
+# slimrat - 2shared.com plugin 
 #
-# Copyright (c) 2009 Yunnan
+# Copyright (c) 2008-2009 Přemek Vyhnal
 # Copyright (c) 2009 Tim Besard
 #
 # This file is part of slimrat, an open-source Perl scripted
@@ -29,11 +29,9 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 #
 # Authors:
-#    Yunnan <www.yunnan.tk>
-#    Tim Besard <tim-dot-besard-at-gmail-dot-com>
+#    eightmillion <eightmillion-at-gmail-dot-com>
 #
 # Plugin details:
-##   BUILD 1
 #
 
 #
@@ -41,7 +39,7 @@
 #
 
 # Package name
-package OdSiebie;
+package TwoShared;
 
 # Extend Plugin
 @ISA = qw(Plugin);
@@ -51,86 +49,73 @@ use WWW::Mechanize;
 
 # Custom packages
 use Log;
-use Toolbox;
 use Configuration;
+use Toolbox;
 
 # Write nicely
 use strict;
 use warnings;
 
-
-#
-# Routines
-#
-
-# Constructor
 sub new {
-	my $self  = {};
-	$self->{CONF} = $_[1];
-	$self->{URL} = $_[2];
-	$self->{MECH} = $_[3];
-
-	bless($self);
-	
-	$self->{PRIMARY} = $self->fetch();
-	
-	return $self;
+    my $self  = {};
+    $self->{CONF} = $_[1];
+    $self->{URL} = $_[2];
+    $self->{MECH} = $_[3];
+    bless($self);
+    
+    $self->{PRIMARY} = $self->fetch();
+    
+    return $self;
 }
 
-# Plugin name
 sub get_name {
-	return "OdSiebie";
+    return "2shared";
 }
 
-# Filename
 sub get_filename {
-	my $self = shift;
+    my $self = shift;
 
-	return $1 if ($self->{PRIMARY}->decoded_content =~ m/Pobierasz plik: ([^<]+)<\/div>/);
+    return $1 if ($self->{PRIMARY}->decoded_content =~ /Download ((?!2shared toolbar).*)/);
 }
 
-# Filesize
 sub get_filesize {
-	my $self = shift;
+    my $self = shift;
+    $/ = '';
 
-	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/<dt>Rozmiar pliku:<\/dt>\s*<dd> ([^<]+)<\/dd>/s);
+    return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/File size:<\/span>\n\s*([\d,\sKMBG]+(?= ))/);
 }
 
-# Check if the link is alive
 sub check {
-	my $self = shift;
-	
-	return -1 if ($self->{MECH}->uri() =~ m/upload.html/);
-	return 1  if($self->{MECH}->content() =~ m/Pobierz plik/);
-	return 0;
+    my $self = shift;
+    
+    $_ = $self->{PRIMARY}->decoded_content;
+    return -1 if(m/The file link that you requested is not valid/);
+    return 1  if(m/Download (?!2shared toolbar)/);
+    return 0;
 }
 
-# Download data
-sub get_data {
-	my $self = shift;
-	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
-	
-	# Click to the secondary page
-	$self->{MECH}->follow_link( text => 'Pobierz plik' );
-	dump_add(data => $self->{MECH}->content());
-	
-	# Download URL
-	if ($self->{MECH}->follow_link( text => 'kliknij tutaj')) {
-		my $download = $self->{MECH}->uri();
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
-	}
-	
-	die("could not match any action");
+sub get_data_loop  {
+    
+    my $self = shift;
+    my $data_processor = shift;
+    my $captcha_processor = shift;
+    my $message_processor = shift;
+    my $headers = shift;
+                       
+    # Extract secondary page
+    $_ = $self->{MECH}->content();
+    my $download;
+    unless (($download) = /(?<=window.location = ["'])([^"']+)/){
+        die("cannot extract download location");
+    }
+    
+    return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
 }
 
-# Amount of resources
+
+
+Plugin::register("^([^:/]+://)?([^.]+\.)?2shared.com");
 Plugin::provide(1);
 
-# Register the plugin
-Plugin::register("^[^/]+//(?:www.)?odsiebie.com");
-
 1;
-
+__END__

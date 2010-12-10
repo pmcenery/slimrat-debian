@@ -128,8 +128,8 @@ sub readable2bytes {
 	s/\s+//g;
 	s/(\d+),(\d+)/$1.$2/;
 	my %mul = (K=>2**10, M=>2**20, G=>2**30);
-	if    (/(\d+(?:\.\d+)?)([KMG])B?/i) { return $1 * $mul{uc($2)} }
-	elsif (/(\d+(?:\.\d+)?)B?/i)        { return $1 }
+	if    (/(\d+(?:\.\d+)?)([KMG])(Byte|B)?/i) { return $1 * $mul{uc($2)} }
+	elsif (/(\d+(?:\.\d+)?)(Byte|B)?/i)        { return $1 }
 	else {return 0}
 }
 
@@ -144,15 +144,17 @@ sub thread_id {
 # $1: seconds to wait
 # $2: this wait can be skipped if true
 sub wait {
-	my $wait = shift or return;
+	my $wait = shift || return;
 	return if (shift and $config->get("skip_waits"));
 	require Log;
-	Log::info(sprintf("Waiting ".seconds_readable($wait)));
+	Log::info("Waiting ".seconds_readable($wait));
 	#sleep($wait);
 	# TODO: sleep() postpones SIG_INT till end of sleep
 	while ($wait) {
-		$wait -= 1;
+		$wait--;
 		sleep(1);
+		#Log::progress("Waiting ".seconds_readable($wait));
+		#hm, it doesnt work if more than one file is downloaded. But im really missing this feature
 	}
 }
 

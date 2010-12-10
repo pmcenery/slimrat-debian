@@ -1,6 +1,6 @@
-# slimrat - direct downloading plugin
+# slimrat - FileSonic.com plugin
 #
-# Copyright (c) 2008 Přemek Vyhnal
+# Copyright (c) 2010 Přemek Vyhnal
 #
 # This file is part of slimrat, an open-source Perl scripted
 # command line and GUI utility for downloading files from
@@ -29,7 +29,6 @@
 #
 # Authors:
 #    Přemek Vyhnal <premysl.vyhnal gmail com>
-#    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #
 
 #
@@ -37,13 +36,13 @@
 #
 
 # Package name
-package Direct;
+package FileSonic; # ex- sharingmatrix.com
 
 # Extend Plugin
 @ISA = qw(Plugin);
 
 # Packages
-use LWP::UserAgent;
+use WWW::Mechanize;
 
 # Custom packages
 use Log;
@@ -67,65 +66,67 @@ sub new {
 	$self->{MECH} = $_[3];
 	bless($self);
 	
-	$self->{CONF}->set_default("enabled", 0);
-	if ($self->{CONF}->get("enabled")) {
-		warning("no appropriate plugin found, using 'Direct' plugin");
-	} else {
-		die("no appropriate plugin found");
-	}
-
-	eval($self->{HEAD} = $self->{MECH}->head($self->{URL}));
-	die("URL not usable") if ($!);
+	$self->{PRIMARY} = $self->{MECH}->get($self->{URL});
+	die("primary page error, ", $self->{PRIMARY}->status_line) unless ($self->{PRIMARY}->is_success);
+	dump_add(data => $self->{MECH}->content());
 
 	return $self;
 }
 
 # Plugin name
 sub get_name {
-	return "Direct";
+	return "FileSonic";
 }
 
-# Get filename
+# Filename
 sub get_filename {
 	my $self = shift;
-	
-	# Get filename through HTTP request
-	my $filename = $self->{HEAD}->filename;
-	
-	# If unsuccessfull, deduce from URL
-	$filename = ((URI->new($self->{URL})->path_segments)[-1]) unless ($filename);
-	return $filename;
+
+	return $1 if ($self->{PRIMARY}->decoded_content =~ m#<title>Download (.*?) for free#);
 }
 
 # Filesize
 sub get_filesize {
 	my $self = shift;
-	return $self->{HEAD}->content_length;
+	my $size;
+
+	return readable2bytes($size) if (($size) = $self->{PRIMARY}->decoded_content =~ m#<span class="size">(.*?)</span>#);
 }
 
 # Check if the link is alive
 sub check {
 	my $self = shift;
 	
-	return 1 if ($self->{HEAD}->is_success);
-	return -1;
+	$_ = $self->{PRIMARY}->decoded_content;
+	return -1 if (m#Error 9005#); # Not found (in all languages)
+	return 1 if(m#/download-free/#);
+	return 0;
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
 	# Input data
 	my $self = shift;
 	my $data_processor = shift;
 	my $captcha_processor = shift;
 	my $message_processor = shift;
 	my $headers = shift;
+
+
+	(my $id) = $self->{URL} =~ m#/file/(\d+)/#;
+	$self->{MECH}->get("http://www.filesonic.com/download-free/$id");
+	dump_add(data => $self->{MECH}->content());
+
+	(my $download) = $self->{MECH}->content() =~ m#downloadUrl = "(.+?)";#;
 	
-	return $self->{MECH}->request(HTTP::Request->new(GET => $self->{URL}, $headers), $data_processor);
+	return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
+
 }
 
 # Amount of resources
 Plugin::provide(-1);
 
-# Return
-1;
+# Register the plugin
+Plugin::register("^[^/]+//((.*?)\.)?(filesonic|sharingmatrix).com/");
 
+1;
