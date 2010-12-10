@@ -10,13 +10,13 @@ override_dh_auto_build:
 
 # Install icons (requires renaming)
 override_dh_auto_install:
-	install -D icon/icon-slimrat-128.png \
+	install -D -m 0644 icon/icon-slimrat-128.png \
 		debian/slimrat/usr/share/icons/hicolor/128x128/apps/slimrat.png
-	install -D icon/icon-slimrat-48.png \
+	install -D -m 0644 icon/icon-slimrat-48.png \
 		debian/slimrat/usr/share/icons/hicolor/48x48/apps/slimrat.png
-	install -D icon/icon-slimrat-16.png \
+	install -D -m 0644 icon/icon-slimrat-16.png \
 		debian/slimrat/usr/share/icons/hicolor/16x16/apps/slimrat.png
-	install -D icon/icon-slimrat.svg \
+	install -D -m 0644 icon/icon-slimrat.svg \
 		debian/slimrat/usr/share/icons/hicolor/scalable/apps/slimrat.png
 
 # Hook to create manpages from the perl files
