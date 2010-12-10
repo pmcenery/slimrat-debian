@@ -1,3 +1,125 @@
+2010-10-31  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: Hotfile - added premium account support, thanks to pietrek
+
+    * plugins: CzShare - changed config keys for profi account
+	
+2010-09-28  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: Rapidshare rewritten (Rapidshare API used)
+
+    * plugins: Depositfiles fixed, thanks to SkazochNik
+
+2010-09-16  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: Updated/fixed
+
+2010-08-23  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: Oron.com added
+
+
+2010-07-23  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: megaupload Free membership -  Shorter waiting time
+
+	* something in last months
+
+
+2010-02-27 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+    * slimrat: slight manpage fixes, and some default configuration key
+      addition.
+
+
+2010-02-25 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+    * slimrat: updated help messages.
+
+    * plugins: whacked out update functionality, we aren't using it right now.
+
+
+2010-02-13  Přemek Vyhnal  <premysl.vyhnal gmail com>
+
+    * plugins: added Uloz.to
+
+    * plugins: updated a lot of plugins to make them work again
+
+    * plugins: removed OdSiebie. Site is down
+
+
+2010-02-03 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * common (download): fixed a flushing issue (fixes issue 134).
+
+   * plugin (Uploading): added action case (fixes issue 132).
+
+   * plugin (CZshare): added missing reload upon known wait action.
+
+
+2010-02-02 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * plugins: fixed some broken check() functionality.
+
+
+2009-12-02 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * common (download): skip the download when download_prepare returns 1 (ergo
+     skip upon redownload).
+
+   * plugins (rapidshare): experimental support for premium service.
+
+   * common: various deadlock issues fixed.
+
+
+2009-11-19 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * plugins: fix for uploading.com (patch by tipingus).
+
+   * semaphore: ditching old framework in favour of perl built-ins.
+
+
+2009-11-07 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * plugins: finished resume handline.
+
+   * common (download): added an extra retry check when resuming has been
+     attempted (as some servers tend to fail upon Range requests, though
+     they advertise the range capability).
+
+
+2009-11-06 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * common (download): altered the exception handling framework to a more
+     advanced alternative, based on Try::Tiny.
+
+   * plugins: moved the reference blessings to an earlier place, before any
+     possibly die(), as that could prohibit the destructor from getting
+     called and mess up resource handling.
+
+   * common (download): speed calculation using a moving-average algorithm.
+
+
+2009-11-05 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * plugins: altered retry framework, known loops (e.g. no slots available)
+     are now processed internally and forever, but controlled by shared
+     functionality (Plugin.pm:get_data)
+
+
+2009-11-04 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * configuration + others: correct usage of contains/defines, which now allows
+     a flexible perl-alike syntax, emits appropriate warnings and is a lot less
+     error prone.
+
+
+2009-10-13 Tim Besard <tim-dot-besard-at-gmail-dot-com>
+
+   * clipboard: new code, using the Gtk2 clipboard functionality. Kudos
+     to Torsten Schoenfeld!
+
+
 2009-10-07 Tim Besard <tim-dot-besard-at-gmail-dot-com>
 
    * common (download): filenames are now escaped optionally.
@@ -5,11 +127,17 @@
    * plugin (resources): fixed critical issue, where resource handling would get
      corrupted when a plugin provided infinite resources.
 
+   * common (download): decode possibly UTF8 filenames.
+
+   * gui (thread_download): decode UTF8 output from FileChooser widget.
+
 
 2009-10-06 Tim Besard <tim-dot-besard-at-gmail-dot-com>
 
    * hotfile (get_data): fixed captcha provider.
- 
+
+   * plugins (storageto): added StorageTo plugin.
+
    * plugins (update): enabled downloading new plugins, and increased verbosity
      a bit.
 

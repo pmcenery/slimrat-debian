@@ -37,9 +37,6 @@
 # Thanks to:
 #    Bartłomiej Palmowski
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -74,7 +71,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -112,20 +108,21 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
-	my $data_processor = shift;	
-	
-	# Fetch primary page
-	$self->reload();
+	my $data_processor = shift;
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 		
 	# Download URL
 	if ($self->{MECH}->content() =~ m/<(img|embed) src=\"files\/([^<]+)\/([^<]+)\.(jpeg|jpg|png|gif|bmp|tif|tiff|wmv|avi|mpg|mov|asf|swf|JPEG|JPG|PNG|GIF|BMP|TIF|TIFF|WMV|AVI|MPG|MOV|ASF|SWF)\" ><br><br>/) {
 		my $download = "http://www.filehive.com/files/$2/$3.$4";	
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
+		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
 	}
 	
-	die("could not match any action");
+	return;
 }
 
 

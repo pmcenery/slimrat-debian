@@ -31,9 +31,6 @@
 # Authors:
 #    Přemek Vyhnal <premysl.vyhnal gmail com>
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -68,9 +65,12 @@ sub new {
 	my $self  = {};
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
-	$self->{MECH} = $_[3];
-
+	$self->{MECH} = $_[3];	
 	bless($self);
+	
+	$self->{CONF}->set_default("username", undef);
+	$self->{CONF}->set_default("password", undef);
+
 	
 	$self->{PRIMARY} = $self->fetch();
 	
@@ -99,26 +99,25 @@ sub get_filesize {
 # Check if the link is alive
 sub check {
 	my $self = shift;
-
-	return 1 if ($self->{PRIMARY}->decoded_content =~ m#<span class="nadpis">Download</span>#);
+	return 1 if ($self->{PRIMARY}->decoded_content =~ m#<span class="nadpis">Download</span>|vyčerpána maximální kapacita FREE downloadů#);
 	return -1 if ($self->{PRIMARY}->decoded_content =~ m/error/i);
 	return 0;
 }
 
 # Download data
-sub get_data {
+sub get_data_loop {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	my $read_captcha = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 
 	#
 	# "PROFI" download
 	#
 	
-	if($self->{CONF}->get("login") and $self->{CONF}->get("pass")) {
+	if(defined($self->{CONF}->get("username")) and defined($self->{CONF}->get("password"))) {
 		# Download URL
 		if ((my ($id) = $self->{MECH}->content() =~ m#<input type="hidden" name="id" value="(.+?)" />#)
 			&& (my ($file) = $self->{MECH}->content() =~ m#<input type="hidden" name="file" value="(.+?)" />#)) {
@@ -126,8 +125,8 @@ sub get_data {
 			# hm, why Im not able to do this with Mechanize?
 			my $res = $self->{MECH}->post("http://czshare.com/prihlasit.php", {
 				prihlasit=>1,
-				jmeno=>$self->{CONF}->get("login"),
-				heslo=>$self->{CONF}->get("pass"),
+				jmeno=>$self->{CONF}->get("username"),
+				heslo=>$self->{CONF}->get("password"),
 				id=>$id,
 				file=>$file,
 			});
@@ -135,7 +134,7 @@ sub get_data {
 			dump_add(data => $self->{MECH}->content());
 	
 			if ($self->{MECH}->content() =~ m#http://.+?/$id/.+?/.+?/# ) {
-				return $self->{MECH}->request(HTTP::Request->new(GET => $&), $data_processor);
+				return $self->{MECH}->request(HTTP::Request->new(GET => $&, $headers), $data_processor);
 			}
 		}
 	}
@@ -148,7 +147,10 @@ sub get_data {
 	else { 
 		# Slot availability
 		if ($self->{MECH}->content() =~ m#vyčerpána maximální kapacita FREE downloadů#) {
-			die("no free slots available");
+			&$message_processor("no free slots available");
+			wait(60);
+			$self->reload();
+			return 1;
 		}
 		
 		# Free form
@@ -168,7 +170,7 @@ sub get_data {
 	
 				# Download captcha
 				my $captcha_data = $self->{MECH}->get($captcha_url)->content();
-				$captcha = &$read_captcha($captcha_data, "png");
+				$captcha = &$captcha_processor($captcha_data, "png");
 				$self->{MECH}->back();
 	
 				# Submit captcha form
@@ -180,15 +182,71 @@ sub get_data {
 	
 			# Generate request
 			my($action, $id, $ticket) = $self->{MECH}->content() =~ m#<form name="pre_download_form" action="(.+?)".+name="id" value="(\d+)".+name="ticket" value="(.+?)"#s;# <input type="submit" name="submit_btn" DISABLED value="stahnout " /> 
-				my $req = HTTP::Request->new(POST => $action);
+				my $req = HTTP::Request->new(POST => $action, $headers);
 			$req->content_type('application/x-www-form-urlencoded');
 			$req->content("id=$id&ticket=$ticket");		
 			return $self->{MECH}->request($req, $data_processor);
 		}
 	}
 		
-	die("could not match any action");
+	return;
 }
+
+
+
+# Preprocess captcha image
+sub ocr_preprocess {
+	my ($self, $captcha_file) = @_;
+	
+	# Remove the image background
+	system("convert $captcha_file -fuzz 40% -fill white -opaque \"rgb(255,100,22)\" -resize 200%x100%  -colorspace Gray -threshold 5% $captcha_file"); 
+}
+
+# Postprocess captcha value
+sub ocr_postprocess {
+	my ($self, $captcha_value) = @_;
+	$_ = $captcha_value;
+
+	
+	# Fix common errors
+
+	s/B/8/g;
+	s/D/0/g;
+	s/E/6/g;
+	#s/¤/4/g; # FIXME
+	s/il/4/g	if(length > 6);
+	s/fl/4/g	if(length > 6);
+	s/f1/4/g	if(length > 6);
+	s/I1/b/g	if(length > 6); # or h?
+	s/\)\(/8/g;
+	s/\|1/p/g;
+	s/\[:/c/g	if(length > 6);
+	s/[Il]{2}/0/g	if(length > 6);
+	s/I\]/0/g	if(length > 6);
+	s/K</k/g	if(length > 6);
+	s/li/6/g	if(length > 6);
+
+	# some more to check
+	#]| p
+	#|] p
+	#| l
+	#1: c
+	#i1 4
+	#Q 4
+	#ii 3
+
+	#a e
+	#u o
+	#n p
+	#h b
+		
+		
+	# Replace uppercase letters with lowercase
+	$_ = lc($_);
+
+	return $_;
+}
+
 
 # Amount of resources
 Plugin::provide(-1);

@@ -71,8 +71,6 @@ my $config_global = new Configuration;
 
 # Base configuration
 my $config = new Configuration;
-$config->set_default("update_server", "http://slimrat.googlecode.com/svn/tags/1.0/src/plugins");
-$config->set_default("update_cache", $ENV{HOME}."/.slimrat/updates");
 $config->section("all")->set_default("retry_count", 5);
 $config->section("all")->set_default("retry_timer", 60);
 
@@ -110,12 +108,8 @@ sub new {
 			}
 		}
 		
-		# Configuration handling (propagate global plugin settings)
-		my $config_plugin = $config_global->section($plugin);
-		$config_plugin->merge($config);
-		
 		# Construction
-		my $object = new $plugin ($config_plugin, $url, $mech);
+		my $object = new $plugin ($config_global->section($plugin), $url, $mech);
 		return $object;
 	}
 	return 0;
@@ -130,14 +124,15 @@ sub DESTROY {
 	lock(%resources);
 	if ($resources{$plugin} >= 0) {
 		$resources{$plugin}++;
+		cond_signal(%resources);
 		debug("restoring available resources for plugin $plugin to ", $resources{$plugin});
 	}
 }
 
 # Return code
 sub code {
-		my ($self) = @_;
-		return $self->{MECH}->status();
+	my ($self) = @_;
+	return $self->{MECH}->status();
 }
 
 # Reload the page
@@ -159,6 +154,42 @@ sub fetch($) {
 	return $res;
 }
 
+# Get data
+sub get_data {
+	# Input data (the stuff we need)
+	my $self = shift;
+	
+	# Fetch primary page
+	$self->fetch();
+	
+	# Main loop
+	while (1) {
+		# Iterate
+		my $rv = $self->get_data_loop(@_);
+		
+		# Check if the plugin actually did something
+		if (!defined($rv)) {
+			die("plugin could not match any action");
+		}
+		
+		# Check if HTTP::Response
+		elsif (ref($rv) eq "HTTP::Response") {
+			return $rv;
+		}
+		
+		# Normal loop exit, please retry
+		elsif ($rv == 1) {
+			next;
+		}
+		
+		# Unknown RV
+		else {
+			warning("plugin returned unknown value of type ", ref($rv));
+			die("todo");
+		}
+	}	
+}
+
 
 #
 # Static functionality
@@ -170,15 +201,8 @@ sub configure {
 	$config_global->merge($complement);
 	$config->merge($config_global->section("plugin"));
 	
-	$config->path_abs("update_cache");
-	
 	# Load plugins
 	load("$RealBin/plugins");
-	if (-d $config->get("update_cache")) {
-		load($config->get("update_cache"))
-	} else {
-		mkdir $config->get("update_cache") || warning("could not create update cache folder, updating plugins will not work");
-	}
 	execute();
 	fatal("no plugins loaded") unless ((scalar keys %plugins) || (scalar grep /plugins\/Direct\.pm$/, keys %INC)); # Direct doesnt register, so it isnt in %plugins
 	debug("loaded " . keys(%plugins) . " plugins (", join(", ", sort values %plugins), ")");
@@ -191,7 +215,9 @@ sub register {
 
 # Provide instantes
 sub provide {
+	lock(%resources);
 	$resources{(caller)[0]} = shift;
+	cond_broadcast(%resources);
 }
 
 # Get a plugin's name
@@ -205,63 +231,7 @@ sub get_package {
 	return "Direct";
 }
 
-# Update the plugins
-sub update {
-	# Get BUILDS file from update server
-	my $builds = get($config->get("update_server") . "/BUILDS");
-	if ($builds) {
-		# Read builds
-		dump_add(title => "updater build list", data => $builds, type => "log");
-		my %builds;
-		$builds{$1} = $2 while ($builds =~ /^\s*([^#].*?)\s+(\d+)/gm);
-				
-		# Compare builds
-		my $updates = 0;
-		foreach my $plugin (keys %details) {
-			if (!defined $builds{$plugin}) {
-				warning("update server does not provide resources for plugin '$plugin'");
-				next;
-			}
-			if (!defined($details{$plugin}) || $builds{$plugin} > $details{$plugin}{BUILD}) {
-				$updates++;
-				info("downloading update for $plugin");
-				
-				# Download and install update
-				my $update = get($config->get("update_server") . "/$plugin");
-				if (! $update) {
-					error("could not update plugin '$plugin' (error fetching update)");
-					next;
-				}
-				elsif ($update =~ m/^##\s*BUILD\s+(.+)/m) {
-					dump_add(title => "update '$plugin'", data => $update, type => "pm");
-					if ($1 != $builds{$plugin}) {
-						error("could not update plugin '$plugin' (serverside build number mismatches)");
-						next;
-					}
-					
-					open UPDATE, ">" . $config->get("update_cache") . "/$plugin";
-					if (!-w UPDATE) {
-						error("could not update plugin '$plugin' (plugin file not writable)");
-						next;
-					}
-					print UPDATE $update;
-					close UPDATE;
-					info("updated plugin '$plugin'");
-				}
-				else {
-					dump_add(title => "update '$plugin' (corrupt)", data => $update, type => "pm");
-					error("could not update plugin '$plugin', (update corrupt)");
-					next;
-				}
-			}
-		}
-		info("everything up to date already") if (!$updates);
-	} else {
-		return error("could not update plugins (error fetching builds list)");
-	}	
-}
-
-# Load the plugins (dependancy check + execution)
+# Load the plugins (dependancy check and other pre-parsing code)
 sub load {
 	my $folder = shift;
 	
@@ -291,20 +261,15 @@ sub load {
 			elsif (m/^##\s*(\w+)\s+(.+)/) {
 				$plugin_info{$1} = $2;			
 			}
-		}
+		} 
 		close(PLUGIN);
-		if (!defined($plugin_info{BUILD})) {
-			error("plugin '", basename($plugin), "' did not specify build number");
-			next;
-		}
 		$plugin_info{PATH} = $plugin;
 		
-		# Check versions
-		if (!defined($details{basename($plugin)})) {
-			$details{basename($plugin)} = \%plugin_info;
-		} elsif ($details{basename($plugin)}{BUILD} < $plugin_info{BUILD}) {
-			debug("replacing plugin '", basename($plugin), "' with newer version");
-			delete($details{basename($plugin)});
+		# Check if plugin isn't registered yet
+		if (defined($details{basename($plugin)})) {
+			error("plugin '", basename($plugin), "' loaded twice");
+			next;
+		} else {
 			$details{basename($plugin)} = \%plugin_info;
 		}
 		

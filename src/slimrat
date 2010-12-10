@@ -60,14 +60,13 @@ use Toolbox;
 use Queue;
 use Log;
 use Configuration;
-use Semaphore;
-
-# Function prototypes
-sub quit($);
 
 # Write nicely
 use strict;
 use warnings;
+
+# Function prototypes
+sub quit($);
 
 
 #
@@ -87,7 +86,7 @@ my @failedlinks:shared;
 my @oklinks:shared;
 
 # Shared data
-my %data:shared; my $s_data = new Semaphore;
+my %data:shared;
 
 
 #
@@ -111,8 +110,7 @@ GetOptions (
 		"kill|k",
 		"debug",
 		"quiet|q",
-		"config=s",
-		"update"
+		"config=s"
 );
 
 # Initialise global configuration
@@ -120,11 +118,16 @@ my $config = config_init($options{"config"});
 
 # Initialise own configuration
 my $config_cli = new Configuration;
+$config_cli->set_default("address", undef);
+$config_cli->set_default("post_all", undef);
+$config_cli->set_default("post_download", undef);
+$config_cli->set_default("post_failure", undef);
 $config_cli->set_default("mode", "download");
 $config_cli->set_default("to", ".");
 $config_cli->set_default("threads", 1);
 $config_cli->set_default("image_viewer", "asciiview -kbddriver stdin -driver stdout %s");
 $config_cli->set_default("daemon", 0);
+$config_cli->set_default("list", undef);
 $config_cli->merge($config->section("cli"));
 
 # Give the usage or manual
@@ -154,9 +157,7 @@ if ($options{"kill"}) {
 }
 
 # Mode (e.g. what slimrat should do)
-usage("cannot combine --check with --update option") if ($options{"check"} && $options{"update"});
 $config_cli->set("mode", "check") if ($options{"check"});
-$config_cli->set("mode", "update") if ($options{"update"});
 
 # Options we might use later on
 $config_cli->set("list", $options{"list"}) if ($options{"list"});
@@ -186,7 +187,7 @@ $config->section("log")->set("show_thread", 1) if ($config_cli->get("threads") >
 
 # Check if we got input files
 if ($config_cli->get("mode") eq "check" || $config_cli->get("mode") eq "download") {
-	if (!scalar @ARGV && !$config_cli->get("list")) {
+	if (!scalar @ARGV && !defined($config_cli->get("list")) && !defined($config->section("queue")->get("file"))) {
 		usage("no input URLs");
 	}
 }
@@ -199,19 +200,21 @@ while ($_ = shift) { # clear @ARGV to be able to read input from user with <> la
 	s{^(?!\w+://)}{http://};
 	Queue::add($_);
 }
-if ($config_cli->contains("list") && $config_cli->get("list") eq "-") {
+if (defined($config_cli->get("list")) && $config_cli->get("list") eq "-") {
+	debug("reading URL's from STDIN");
 	chomp and Queue::add($_) while (<>);
 }
 
 # Set socket local address if needed
-if($config_cli->contains("address")) {
+if (defined(my $address = $config_cli->get("address"))) {
 	use LWP::Protocol::http;
-	push(@LWP::Protocol::http::EXTRA_SOCK_OPTS, LocalAddr => $config_cli->get("address"));
+	push(@LWP::Protocol::http::EXTRA_SOCK_OPTS, LocalAddr => $address);
 }
 
 # Fork in background
 if ($config_cli->get("daemon")) {
 	info("forking in background");
+	info("files are downloaded to the root directory by default in daemon mode. You probably want to use the --to option") if($config_cli->get("to") eq ".");
 	daemonize();
 	print "\n\n";
 }
@@ -224,21 +227,12 @@ if ($config_cli->get("daemon")) {
 
 info("slimrat started (noninteractive command-line interface)");
 
-#
-# Update
-#
-
-if ($config_cli->get("mode") eq "update") {
-	info("updating plugins");
-	quit(Plugin::update());
-}
-
 
 #
 # Check
 #
 
-elsif ($config_cli->get("mode") eq "check") {
+if ($config_cli->get("mode") eq "check") {
 	info("checking URLs");
 	my $dead_links = 0;
 	
@@ -263,13 +257,14 @@ elsif ($config_cli->get("mode") eq "check") {
 			status($link, 0, "plugin failure");
 		} else {
 			my $status = $plugin->check();
+			my $extra;
 			if ($status < 0) {
 				status($link, $status, "file is dead");
 			} elsif ($status == 0) {
 				status($link, $status, "plugin failure (could not distinguish whether file is up or down)");
 			} elsif ($status > 0) {
 				my $size = $plugin->get_filesize();
-				my $extra = ($plugin->get_filename()||"unknown filename") . ", " .  ($size ? bytes_readable($size) : "unknown filesize") if ($status>0);
+				$extra = ($plugin->get_filename()||"unknown filename") . ", " .  ($size ? bytes_readable($size) : "unknown filesize") if ($status>0);
 				status($link, $status, $extra);
 				$alive++
 			}
@@ -316,8 +311,8 @@ elsif ($config_cli->get("mode") eq "download") {
 	thread_download();
 
 	# Command after all downloads
-	if ($config_cli->contains("post_all")) {
-		system($config_cli->get("post_all"));
+	if (defined(my $command = $config_cli->get("post_all"))) {
+		system($command);
 	}
 	
 	# Quit
@@ -349,28 +344,39 @@ sub thread_progress {
 	};
 	
 	while (1) {
-		$s_data->down();
-		my @threads = keys %data;
-		if (scalar(@threads)) {
-			my $string = "Downloading " . scalar(@threads) . " file";
-			$string .= "s" if scalar(@threads) > 1;
+		{
+			lock(%data);
+			my @threads = keys %data;
 			
-			my $speed = 0;
-			my $eta_min = 0;
-			my $eta = 0;
-			foreach my $thread (@threads) {
-				$speed += $data{$thread}{speed};
-				$eta += $data{$thread}{eta};
-				$eta_min = $data{$thread}{eta} if (!$eta_min || $eta_min > $data{$thread}{eta});
+			if (scalar(@threads)) {
+				my $string = "Downloading " . scalar(@threads) . " file";
+				$string .= "s" if scalar(@threads) > 1;
+				
+				my $speed = 0;
+				my $eta_min = 0;
+				my $eta = 0;
+				my $total = 0;
+				my $done = 0;
+				{
+					foreach my $thread (@threads) {
+						$speed += $data{$thread}{speed};
+						$eta += $data{$thread}{eta};
+						$eta_min = $data{$thread}{eta} if (!$eta_min || $eta_min > $data{$thread}{eta});
+						$total += $data{$thread}{total};
+						$done += $data{$thread}{done};
+					}
+				}
+				
+				$string .= ", " . bytes_readable($speed) . "/s";
+				if($total>0) {
+					$string .= ", " . int(100*$done/$total) . "%";
+				}
+				$string .= ", " . seconds_readable($eta) . " remaining";
+				$string .= " (" . seconds_readable($eta_min) . " until next)" if ($eta_min != $eta);
+				
+				progress($string); 
 			}
-			
-			$string .= " at " . bytes_readable($speed) . "/s";
-			$string .= ", " . seconds_readable($eta) . " remaining";
-			$string .= " (" . seconds_readable($eta_min) . " until next)" if ($eta_min != $eta);
-			
-			progress($string); 
 		}
-		$s_data->up();
 		sleep(1);
 	}
 }
@@ -407,16 +413,15 @@ sub thread_download {
 			$link,
 			$config_cli->get("to"),
 			sub { # Progress indication
+				lock(%data);
+				
 				# No arguments = not downloading anymore
 				if (scalar(@_) == 0) {
-					$s_data->down();
 					delete($data{$id});
-					$s_data->up();
 					return;
 				}
 							
 				# Create data container
-				$s_data->down();
 				if (!defined($data{$id})) {
 					share($data{$id});
 					$data{$id} = &share({});
@@ -427,7 +432,6 @@ sub thread_download {
 				$data{$id}{total} = shift;	# filesize in bytes
 				$data{$id}{speed} = shift;	# speed in bytes per second
 				$data{$id}{eta} = shift;	# time remaining in seconds
-				$s_data->up();
 			},
 			sub { # Captcha handler
 				my $captchafile = shift;
@@ -457,8 +461,8 @@ sub thread_download {
 			$queue->skip_globally("DONE");
 
 			# Command after successful download
-			if ($config_cli->contains("post_download")) {
-				system($config_cli->get("post_download"));
+			if (defined (my $command = $config_cli->get("post_download"))) {
+				system($command);
 			}
 		}
 		elsif ($result == -3) { # Insufficient resources
@@ -479,8 +483,8 @@ sub thread_download {
 			push @failedlinks, $link;
 
 			# Command after failed download
-			if ($config_cli->contains("post_failure")) {
-				system($config_cli->get("post_failure"));
+			if (defined(my $command = $config_cli->get("post_failure"))) {
+				system($command);
 			}
 		}
 		
@@ -488,12 +492,16 @@ sub thread_download {
 		$queue->advance()
 	}
 	debug("thread couldn't get any work, exiting");
-	$s_data->down();	# FIXME: does this happen ever? should be handled by progress()
-	delete($data{$id});
-	$s_data->up();
-	lock($threads);
-	$threads--;
-	cond_broadcast($threads);
+	
+	# FIXME: does this happen ever? should be handled by progress()
+	{
+		lock(%data);	
+		lock($threads);
+		
+		delete($data{$id});
+		$threads--;
+		cond_broadcast($threads);
+	}
 }
 
 
@@ -519,11 +527,11 @@ sub quit($) {
 
 =head1 NAME
 
-slimrat-cli
+slimrat - Command-line utility for downloading from filehosters
 
 =head1 VERSION
 
-1.0
+1.0.0-trunk
 
 =head1 DESCRIPTION
 
@@ -536,9 +544,12 @@ slimrat-cli
 
 =head1 OPTIONS
 
+WARNING: command-line parameters have priority over their configuration-file
+         counterparts.
+
 =over 8
 
-=item B<--help>
+=item B<--help>, B<-h>, B<-?>
 
   Prints a summary how to use the client.
 
@@ -546,34 +557,45 @@ slimrat-cli
 
   Prints a manual how to use the client.
 
-=item B<--daemon>
+=item B<--daemon>, B<-d>
 
   Makes slimrat work in the background, by properly forking and redirecting
   the output to a specified logfile. Only one file can be backgrounded at a
   time, to support multiple instances you'll need to specify differend
   state files to save the instances PID in.
 
-=item B<--kill>
+  Plugins which uses CAPTCHA cannot be used in daemon mode.
+  
+  Maps to the 'daemon' key in the configuration file.
+
+=item B<--kill>, B<-k>
 
   Kills a single active client, by looking up the PID in a predefined state file.
 
-=item B<--list>
+=item B<--list FILE>, B<-l FILE>
 
-  Uses the given file as a queue-file containing URLs.
+  Uses the given file as a queue-file containing URLs. When using '-', slimrat
+  will read URL's from STDIN (useful with pipes).
+  
+  Maps to the 'list' key in the configuration file, queue section.
 
-=item B<--check>
+=item B<--check>, B<-c>
 
   Do not download the loaded URLs, just check them.
 
 =item B<--to>
 
   Specifies the target directory for the downloaded files.
+  
+  Maps to the 'to' key in the configuration file.
 
 =item B<--address>
 
   Makes the download client bind to a specific address.
+  
+  Maps to the 'address' key in the configuration file.
 
-=item B<--config>
+=item B<--config FILE>
 
   Load custom configuration file.
 
@@ -583,10 +605,20 @@ slimrat-cli
   of an additional dump archive.
   WARNING: do not use this option by default, as it keeps a whole lot of extra information
            in memory (including _all_ downloaded items).
+  
+  Maps to a value of '5' for the key 'verbosity' in the configuration file, log
+  section.
 
-=item B<--quiet>
+=item B<--quiet>, B<-q>
 
   Makes slimrat less verbose, only displaying errors and warnings.
+  
+  Maps to a value of '2' for the key 'verbosity' in the configuration file, log
+  section.
+
+=item B<--to FOLDER>, B<-t FOLDER>
+
+  Where to download the files to.
 
 =back
 

@@ -1,6 +1,6 @@
-# slimrat - UploadedTo plugin
+# slimrat - Uloz.to plugin
 #
-# Copyright (c) 2009 Přemek Vyhnal
+# Copyright (c) 2010 Přemek Vyhnal
 #
 # This file is part of slimrat, an open-source Perl scripted
 # command line and GUI utility for downloading files from
@@ -36,13 +36,12 @@
 #
 
 # Package name
-package UploadedTo;
+package UlozTo;
 
 # Extend Plugin
 @ISA = qw(Plugin);
 
-# Modules
-use Toolbox;
+# Packages
 use WWW::Mechanize;
 
 # Custom packages
@@ -67,37 +66,39 @@ sub new {
 	$self->{MECH} = $_[3];
 	bless($self);
 	
-	$self->{PRIMARY} = $self->fetch();
-	
+	$self->{PRIMARY} = $self->{MECH}->get($self->{URL});
+	die("primary page error, ", $self->{PRIMARY}->status_line) unless ($self->{PRIMARY}->is_success);
+	dump_add(data => $self->{MECH}->content());
+
 	return $self;
 }
 
 # Plugin name
 sub get_name {
-	return "UploadedTo";
+	return "UlozTo";
 }
 
 # Filename
 sub get_filename {
 	my $self = shift;
 
-	return $1.$2 if ($self->{PRIMARY}->decoded_content =~ m/Filename: \&nbsp;<\/td><td><b>\s*([^<]+?)\s+<\/b>.*Filetype: \&nbsp;<\/td><td>\s*([^<]*)\s*<\/td>/s);
+	return $1 if ($self->{PRIMARY}->decoded_content =~ m#<b>(.*?)</b></h3>#);
 }
 
 # Filesize
 sub get_filesize {
 	my $self = shift;
 
-	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m/Filesize: \&nbsp;<\/td><td>\s*([^<]+?)\s*<\/td>/);
+	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m#<b>(.*?)</b> <br />#);
 }
 
 # Check if the link is alive
 sub check {
 	my $self = shift;
 	
-	return -1 if ($self->{MECH}->uri() =~ m#error_fileremoved#);
-	return 0 if ($self->{MECH}->uri() =~ m#error#);
-	return 1 if ($self->{PRIMARY}->decoded_content =~ m#Free Download#);
+	$_ = $self->{PRIMARY}->decoded_content;
+	return -1 if (m#error404#);
+	return 1 if(m#<img id="captcha"#);
 	return 0;
 }
 
@@ -109,31 +110,49 @@ sub get_data_loop  {
 	my $captcha_processor = shift;
 	my $message_processor = shift;
 	my $headers = shift;
-	
-	# Trafic exceeded
-	if($self->{MECH}->content() =~ m#Or wait (\d+) minutes!#) {
-		wait($1*60);
-		$self->reload();
-		return 1;
+
+	if (my $form = $self->{MECH}->form_name("dwn")) {
+		if($self->{MECH}->content() !~ m#src="http://img\.uloz\.to/captcha/(\d+)\.png"#){
+			die "cannot find captcha";
+		}
+
+		my $captcha_num = $1;
+		my $captcha = &$captcha_processor($self->{MECH}->get("http://img.uloz.to/captcha/$captcha_num.png")->decoded_content, "png",1);
+
+		$self->{MECH}->back();
+
+		$self->{MECH}->form_with_fields("captcha_user");
+		$self->{MECH}->set_fields("captcha_user" => $captcha);
+		my $request = $self->{MECH}->{form}->make_request;
+		$request->header($headers);
+                
+                my $resp = $self->{MECH}->request($request, $data_processor);
+	        debug( $resp->as_string);
+                
+                #when we get HTML page, then something is wrong ... 
+                if ($resp->header('content_type') eq 'text/html'){
+                    $self->reload();                                                                                                                                                                                 
+                    return 1;   
+                }
+		return $self->{MECH}->request($request, $data_processor);
 	}
-	
-	# Download URL
-	elsif ($self->{MECH}->content() =~ m#<form name="download_form" method="post" action="(.+?)">#) {
-		my $download = $1;
-		my $req = HTTP::Request->new(POST => $download, $headers);
-		$req->content_type('application/x-www-form-urlencoded');
-		$req->content("download_submit=Free%20Download");
-		return $self->{MECH}->request($req, $data_processor);
-	}
-	
+		
 	return;
 }
+
+sub ocr_postprocess {
+	my ($self, $captcha) = @_;
+	$_ = $captcha;
+	return if $captcha !~ /^\w{4}$/;
+        return $_;
+}
+
 
 
 # Amount of resources
 Plugin::provide(1);
 
 # Register the plugin
-Plugin::register("^[^/]+//(up(loaded)?.to(/file)?|ul.to)/");
+Plugin::register("^[^/]+//((.*?)\.)?(uloz.to|ulozto.sk|ulozto.net|vipfile.pl)/");
 
 1;

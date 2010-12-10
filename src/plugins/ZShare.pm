@@ -32,9 +32,6 @@
 #    Přemek Vyhnal <premysl.vyhnal gmail com>
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -69,8 +66,7 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];	
-	$self->{URL} =~ s#/video/#/download/#;
-
+	$self->{URL} =~ s#/(video|audio|image|flash)/#/download/#;
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -108,32 +104,32 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
 	# Click the "Download Now" button
-	$self->{MECH}->form_name("form1") or die("could not click the 'Download Now' button");
-	my $res = $self->{MECH}->submit_form();
-	die("secondary page error, ", $res->status_line) unless ($res->is_success);
-	dump_add(data => $self->{MECH}->content());
-	
-	# We will not wait before download because javascript is encoded 
-	# so we dont know how many seconds we have to wait (and because we dont like waiting)
-	# But it is *probably* this number:
-	#(my $wait) = $self->{MECH}->content() =~ m#||here|(\d+)|class|#; 
-	
-	# Download URL
-	if ($self->{MECH}->content() =~ m#var link_enc=new Array\('((.',')*.)'\);#) {
-		my $download = $1;
-		$download = join("", split("','", $download));		
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
+	if ($self->{MECH}->form_name("form1")) {
+		my $res = $self->{MECH}->submit_form();
+		die("secondary page error, ", $res->status_line) unless ($res->is_success);
+		dump_add(data => $self->{MECH}->content());
+		return 1;
 	}
 	
-	die("could not match any action");
+	# Download URL
+	elsif ($self->{MECH}->content() =~ m#var link_enc=new Array\('((.',')*.)'\);#) {
+		my $download = join("", split("','", $1));
+
+		$self->{MECH}->content() =~ m#\|\|here\|(\d+)\|class\|#; 
+		wait($1);
+
+		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
+	}
+	
 }
 
 # Amount of resources

@@ -35,9 +35,6 @@
 # Thanks to:
 #    Bartłomiej Palmowski
 #
-# Plugin details:
-##   BUILD 1
-#
 
 #
 # Configuration
@@ -72,7 +69,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -89,7 +85,7 @@ sub get_name {
 sub get_filename {
 	my $self = shift;
 
-	return $1."\.flv" if ($self->{PRIMARY}->decoded_content =~ m/<title>YouTube - ([^<]+)<\/title>/);
+	return $1."\.flv" if ($self->{PRIMARY}->decoded_content =~ m/'VIDEO_TITLE': '(.*?)'/);
 }
 
 # Filesize
@@ -101,27 +97,28 @@ sub get_filesize {
 sub check {
 	my $self = shift;
 	
-	return -1 if ($self->{PRIMARY}->decoded_content =~ m/<div class="errorBox">/);
-	return 1 if ($self->{PRIMARY}->decoded_content =~ m/var swfArgs/);
+	return -1 if ($self->{PRIMARY}->decoded_content =~ m/<div id="error-box"/);
+	return 1 if ($self->{PRIMARY}->decoded_content =~ m/SWF_ARGS/);
 	return 0;
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 	
 	# Download video
-	if ((my ($v) = $self->{MECH}->content() =~ /swfArgs.*"video_id"\s*:\s*"(.*?)".*/)
-		&& (my ($t) = $self->{MECH}->content() =~ /swfArgs.*"t"\s*:\s*"(.*?)".*/)) {
+	if ((my ($v) = $self->{MECH}->content() =~ /SWF_ARGS.*"video_id"\s*:\s*"(.*?)".*/)
+		&& (my ($t) = $self->{MECH}->content() =~ /SWF_ARGS.*"t"\s*:\s*"(.*?)".*/)) {
 		my $download = "http://www.youtube.com/get_video?video_id=$v&t=$t";
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
+		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
 	}
 	
-	die("could not match any action");
+	return;
 }
 
 

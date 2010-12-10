@@ -32,9 +32,6 @@
 #    Premek Vyhnal <premysl.vyhnal gmail com>
 #    Tim Besard <tim-dot-besard-at-gmail-dot-com>
 #    Kaleb Elwert <vahki.ttc gmail com>
-#
-# Plugin details:
-##   BUILD 1
 
 #
 # Configuration
@@ -69,7 +66,6 @@ sub new {
 	$self->{CONF} = $_[1];
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
-
 	bless($self);
 	
 	$self->{PRIMARY} = $self->fetch();
@@ -109,12 +105,13 @@ sub check {
 }
 
 # Download data
-sub get_data {
+sub get_data_loop  {
+	# Input data
 	my $self = shift;
 	my $data_processor = shift;
-	
-	# Fetch primary page
-	$self->reload();
+	my $captcha_processor = shift;
+	my $message_processor = shift;
+	my $headers = shift;
 
 	# Wait timer
 	my $res = $self->{MECH}->get("http://romhustler.net/download.js");
@@ -129,10 +126,10 @@ sub get_data {
 		my $download = $1;
 		$download = join("", split("','", $download));
 		
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download), $data_processor);
+		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
 	}
 	
-	die("could not match any action");
+	return;
 }
 
 # Amount of resources

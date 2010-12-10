@@ -115,6 +115,7 @@ my $config = config_init($options{"config"});
 my $config_gui = new Configuration;
 $config_gui->set_default("glade_file",  $RealBin.'/slimrat.glade');
 $config_gui->set_default("queue_file",  $ENV{HOME}.'/.slimrat/queue');
+$config_gui->set_default("to",  $ENV{HOME}.'/Downloads');	# TODO: fetch XDG directory
 $config_gui->merge($config->section("gui"));
 
 # Give the usage or manual
@@ -258,7 +259,7 @@ sub quit {
 sub links_parse_add {
 	my $links = shift;
 	foreach (split (/\n+/, $links)) {
-		# remove spaces from beginning and end
+		# Remove trailing and ending spaces
 		s/^\s+//;
 		s/\s+$//;
 		my @newRow;
@@ -519,6 +520,7 @@ sub thread_download {
 	# Folder to download to
 	Gtk2::Gdk::Threads->enter;
 	my $download_to = $gui->get_widget('downto')->get_filename();
+	utf8::encode($download_to);
 	Gtk2::Gdk::Threads->leave;
 	
 	# Process all URLs
@@ -629,11 +631,11 @@ sub thread_download {
 
 =head1 NAME
 
-slimrat-gui
+slimrat-gui - Graphical utility for downloading from filehosters
 
 =head1 VERSION
 
-1.0
+1.0.0-trunk
 
 =head1 DESCRIPTION
 
@@ -646,9 +648,12 @@ slimrat-gui
 
 =head1 OPTIONS
 
+WARNING: command-line parameters have priority over their configuration-file
+         counterparts.
+
 =over 8
 
-=item B<--help>
+=item B<--help>, B<-h>, B<-?>
 
   Prints a summary how to use the client.
 
@@ -656,7 +661,7 @@ slimrat-gui
 
   Prints a manual how to use the client.
 
-=item B<--config>
+=item B<--config FILE>
 
   Load custom configuration file.
 
@@ -666,10 +671,16 @@ slimrat-gui
   of an additional dump archive.
   WARNING: do not use this option by default, as it keeps a whole lot of extra information
            in memory (including _all_ downloaded items).
+  
+  Maps to a value of '5' for the key 'verbosity' in the configuration file, log
+  section.
 
-=item B<--quiet>
+=item B<--quiet>, B<-q>
 
   Makes slimrat less verbose, only displaying errors and warnings.
+  
+  Maps to a value of '2' for the key 'verbosity' in the configuration file, log
+  section.
 
 =back
 

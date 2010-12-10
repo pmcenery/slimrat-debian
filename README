@@ -1,32 +1,7 @@
 Release notes
 -------------
 
-1) Downloading to Unicode folders
-
-When using the GUI to download files, slimrat _will_ have difficulties doing so
-when your destination folder contains non-ASCII characters. Your filesystem
-might support them, but decoding the UTF8 string returned by the FileChooser
-widget isn't done properly yet. This will be fixed in the first bugfix release.
-
-
-2) Download resuming
-
-Though implemented and tested basically, users have reported resuming to be
-non-functional in combination with most plugins.
-
-
-3) Threading issues
-
-Slimrat now makes extensive use of threads, which seems to be error-prone,
-especially on older Perl releases and when closing slimrat down. If you happen
-to find reproducible cases though, please report them to our bug tracker!
-
-
-4) Proxy failure
-
-Failing proxies are _not_ detected, so when a proxy is down all URLs will
-consequently get marked as DEAD. This will get fixed (or worked around) as soon
-as a proper way to check whether the proxy is still alive is found.
+Not available in -trunk.
 
 
 

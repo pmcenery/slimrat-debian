@@ -1,14 +1,14 @@
-Dependancies
+Dependencies
 ------------
 
 The installation instructions below only document the installation of
-slimrat itself, you might need to install optional dependancies.
+slimrat itself, you might need to install optional dependencies.
 
-Those dependancies could be configured by the package manager, or
+Those dependencies could be configured by the package manager, or
 you might need to install them yourself, especially when manually
 installing slimrat.
 
-You need to install the following dependancies using your package manager of choice:
+You need to install the following dependencies using your package manager of choice:
 
 Main
   - Perl (at least 5.8, 5.10 recommended)
@@ -27,23 +27,50 @@ Command-line captcha viewing
 GUI
   - Gtk2::GladeXML
   - Gtk2::SimpleList
-  - xclip (optional, handles GUI clipboard extensions)
-  - Spiffy (optional, handles GUI clipboard extensions)
+
+Some plugins needs extra perl modules. Install them from your package manager or via CPAN. 
+You don't need them installed if you dont want to use that plugins.
+  - URI::Escape
+  - WWW::Mechanize 1.52 (newer version)
+  - JSON::PP
 
 Some examples using package managers:
 
 a) On Debian/Ubuntu
       aptitude install libwww-mechanize-perl
-      aptitude install libgtk2-gladexml-perl xclip libspiffy-perl # For the GUI
+      aptitude install libgtk2-gladexml-perl # For the GUI
       aptitude install aview # For command-line captcha viewing
       aptitude install imagemagick tesseract # For automatic captcha solving
-      
+
+NOTE: when using Debian Lenny (the current stable), some plugins won't work due
+      to libwww-mechanize-perl not being up to date enough. You can install a
+      newer version using CPAN:
+          su -
+          cpan
+          # If you haven't run cpan before, you'll need to configure a bunch of
+          #   settings. You can let CPAN configure them automatically for you.
+          # The next two commands are optional, in order to ensure you are
+          #   running the most recent CPAN module.
+          upgrade CPAN
+          reload CPAN
+          # The next command installs the newer library. It'll need a bunch of
+          #   dependencies, just install them along. Some dependencies are
+          #   optional, which you can skip (some test modules, CPAN will tell
+          #   you).
+          install WWW::Mechanize
+          # If you got an error "could not find unzip", use the following two
+          #   commands.
+          o conf unzip unzip
+          o conf commit
+      Now Perl should prefer the newer installed libraries, which'll make
+      slimrat capable of using the previously failing plugins.
+
 b) On FreeBSD
       portinstall -Pp devel/p5-Getopt-Long devel/p5-Term-ANSIColor x11-toolkits/p5-Gtk2 x11-toolkits/p5-Gtk2-GladeXML x11-toolkits/p5-Gtk2-Ex-Simple-List www/p5-LWP-UserAgent-Determined www/p5-WWW-Mechanize
       
 c) Manually (through CPAN)
       perl -MCPAN -e 'install Getopt::Long, LWP::UserAgent, Term::ANSIColor, WWW::Mechanize';
-      perl -MCPAN -e 'install Gtk2::GladeXML, Gtk2::SimpleList, Spiffy';
+      perl -MCPAN -e 'install Gtk2::GladeXML, Gtk2::SimpleList';
 
 
 
@@ -59,26 +86,16 @@ You can install Slimrat from AUR:
 Gentoo
 ------
 
-1) Install layman and autounmask
+1) Install autounmask
 
 Run the following commands if you haven't installed them already:
-   emerge layman autounmask
+   emerge autounmask
 
 
-2) Add the "kde-testing" overlay
-
-Run the following command to add the "kde-testing" overlay, in which
-slimrat resides:
-   layman -a kde-testing
-
-NOTE: for more information about overlays, have a look at the Gentoo
-      documentation (http://www.gentoo.org/proj/en/overlays/userguide.xml)
-
-
-3) Install slimrat
+2) Install slimrat
 
 a) Stable version:
-   autounmask net-misc/slimrat-0.9.55
+   autounmask net-misc/slimrat-1.0
    emerge slimrat
 
 b) SVN version:
@@ -90,10 +107,10 @@ b) SVN version:
 PLD linux
 ---------
 
-Currently no prebuilt RPM package is available, but the projects
+Currently no prebuilt RPM package is available, but the project's
 CVS repository contains a SPEC file to generate one.
 
-1) Initialise the folder structure
+1) Initialize the folder structure
 
 Do this by issuing the command
    builder --init-rpm-dir
@@ -150,11 +167,11 @@ Windows
 
 NOTE: slimrat has not been tested for use at non-Unix based operation
       system, so many features (including the GUI) might not work. If you
-      come across issues, we'd be happy to fix them so please fill apropriate
+      come across issues, we'd be happy to fix them so please fill appropriate
       bug reports.
 
 Unpack the tarball at a place you want to, you can use Winrar to open the archive.
-You will need to install the dependancies usign CPAN, or if available using the
+You will need to install the dependencies usign CPAN, or if available using the
 package manager of the Perl distribution you are using (ie. "PPM" when using 
 ActiveState Perl).
 

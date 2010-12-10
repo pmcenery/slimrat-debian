@@ -1,7 +1,6 @@
 # slimrat - HotFile plugin
 #
-# Copyright (c) 2009 Yunnan
-# Copyright (c) 2009 Tim Besard
+# Copyright (c) 2010 Přemek
 #
 # This file is part of slimrat, an open-source Perl scripted
 # command line and GUI utility for downloading files from
@@ -29,9 +28,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 #
 # Authors:
-#    Yunnan <www.yunnan.tk>
-#    Tim Besard <tim-dot-besard-at-gmail-dot-com>
-#    Přemek <premysl.vyhnal at gmail>
+#    Premek Vyhnal
 #
 
 #
@@ -39,7 +36,7 @@
 #
 
 # Package name
-package HotFile;
+package Oron;
 
 # Extend Plugin
 @ISA = qw(Plugin);
@@ -68,14 +65,8 @@ sub new {
 	$self->{URL} = $_[2];
 	$self->{MECH} = $_[3];
 	bless($self);	
-		
-	$self->{CONF}->set_default("username", undef);
-	$self->{CONF}->set_default("password", undef);
 
-	if(defined($self->{CONF}->get("username")) and defined($self->{CONF}->get("password"))) {
-		Plugin::provide(-1);
-	} 
-
+	$self->{MECH}->get('http://oron.com/?op=change_lang&lang=english');
 
 	$self->{PRIMARY} = $self->{MECH}->get($self->{URL});
 	die("primary page error, ", $self->{PRIMARY}->status_line) unless ($self->{PRIMARY}->is_success || $self->{PRIMARY}->code == 404);
@@ -86,30 +77,28 @@ sub new {
 
 # Plugin name
 sub get_name {
-	return "HotFile";
+	return "Oron";
 }
 
 # Filename
 sub get_filename {
 	my $self = shift;
 	
-	return $1 if ($self->{PRIMARY}->decoded_content =~ m#</strong>\s*(.+?)\s*<span>\|</span>#);
+	return $1 if ($self->{PRIMARY}->decoded_content =~ m#name="fname" value="(.+?)">#);
 }
 
 # Filesize
 sub get_filesize {
 	my $self = shift;
 
-	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m#<span>\|</span> <strong>(.+?)</strong>#);
+	return readable2bytes($1) if ($self->{PRIMARY}->decoded_content =~ m#</b><br>\s*[^\d]+(\d.*?)<br>#);
 }
 
 # Check if the link is alive
 sub check {
 	my $self = shift;
 	
-	return 1  if (defined $self->{MECH}->form_name("f"));
-#	&lang=en
-#This file is either removed due to copyright claim or is deleted by the uploader.
+	return 1  if (defined $self->{MECH}->form_with_fields( ("method_free") ));
 	return -1;
 }
 
@@ -122,38 +111,12 @@ sub get_data_loop  {
 	my $message_processor = shift;
 	my $headers = shift;
 
-
-
-	#
-	# Premium download
-	#
 	
-	if(defined($self->{CONF}->get("username")) and defined($self->{CONF}->get("password"))) {
-
-		$self->{MECH}->submit_form( with_fields => { 
-				user => $self->{CONF}->get("username"),
-				pass => $self->{CONF}->get("password") });
-		dump_add(data => $self->{MECH}->content());
-		return $self->{MECH}->request(HTTP::Request->new(GET => $self->{URL}, $headers), $data_processor);
+	# download link
+	if ($self->{MECH}->content() =~ m#<a href="(.*?)" class="atitle">#) {
+		return $self->{MECH}->request(HTTP::Request->new(GET => $1, $headers), $data_processor);
 	}
 
-	#
-	# FREE download
-	#
-
-	# Wait timer
-	if ((my ($wait1) = $self->{MECH}->content() =~ m#timerend\=d\.getTime\(\)\+(\d+);\s*document\.getElementById\(\'dwltmr\'\)#)
-	    && (my ($wait2) = $self->{MECH}->content() =~ m#timerend\=d\.getTime\(\)\+(\d+);\s*document\.getElementById\(\'dwltxt\'\)#)) {
-		wait(($wait1 + $wait2)/1000);
-	}
-	
-	# Click the button
-	if ($self->{MECH}->form_name("f")) {
-		$self->{MECH}->submit_form();
-		dump_add(data => $self->{MECH}->content());
-		return 1;
-	}
-	
 	# reCaptcha
 	elsif ($self->{MECH}->content() =~ m#challenge\?k=(.*?)"#) {
 		# Download captcha
@@ -175,21 +138,32 @@ sub get_data_loop  {
 		return 1;
 	}
 	
-	# Extract the download URL
-	elsif ((my $download) = $self->{MECH}->content() =~ m#href="(.*?)" class="click_download">#) {
-		return $self->{MECH}->request(HTTP::Request->new(GET => $download, $headers), $data_processor);
+	# Wait timer
+	elsif ((my $min, my $sec) = ($self->{MECH}->content() =~ m#wait (?:(\d+) minutes, )?(\d+) seconds#)) {
+		$min = 0 unless defined $min;
+		wait($min*60 + $sec);
+		$self->reload();
+		return 1;
 	}
-	
+
+
+	# Click the "free" button
+	elsif (defined $self->{MECH}->form_with_fields( "method_free","op" )) {
+		$self->{MECH}->click("method_free");
+		dump_add(data => $self->{MECH}->content());
+		return 1;
+	}
+
 	return;
 }
+
 
 
 # Amount of resources
 Plugin::provide(1);
 
-
 # Register the plugin
-Plugin::register("^[^/]+//(?:www.)?hotfile.com");
+Plugin::register("^[^/]+//(?:www.)?oron.com");
 
 1;
 
