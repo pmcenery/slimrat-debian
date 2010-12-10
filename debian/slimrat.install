@@ -1,5 +1,8 @@
-src/Clipboard*		usr/lib/slimrat
-src/slimrat.glade	usr/lib/slimrat
-src/slimrat-gui		usr/lib/slimrat
-debian/slimrat.desktop	usr/share/applications
-debian/slimrat.xpm	usr/share/pixmaps
+src/Clipboard.pm		usr/lib/slimrat
+src/slimrat.glade		usr/lib/slimrat
+src/slimrat-gui			usr/lib/slimrat
+debian/slimrat.desktop		usr/share/applications
+icon/icon-slimrat.svg		usr/share/icons/hicolor/scalable/apps/slimrat.svg
+icon/icon-slimrat-16.png	usr/share/icons/hicolor/16x16/apps/slimrat.png
+icon/icon-slimrat-48.png	usr/share/icons/hicolor/48x48/apps/slimrat.png
+icon/icon-slimrat-128.png	usr/share/icons/hicolor/128x128/apps/slimrat.png
