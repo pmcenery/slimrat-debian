@@ -5,9 +5,19 @@
 %:
 	dh $@
 
-# Remove the dh_auto_build and dh_auto_install step
+# Remove the dh_auto_build step
 override_dh_auto_build:
+
+# Install icons (requires renaming)
 override_dh_auto_install:
+	install icon/icon-slimrat-128.png \
+		debian/tmp/usr/share/icons/hicolor/128x128/apps/slimrat.png
+	install icon/icon-slimrat-48.png \
+		debian/tmp/usr/share/icons/hicolor/48x48/apps/slimrat.png
+	install icon/icon-slimrat-16.png \
+		debian/tmp/usr/share/icons/hicolor/16x16/apps/slimrat.png
+	install icon/icon-slimrat.svg \
+		debian/tmp/usr/share/icons/hicolor/scalable/apps/slimrat.png
 
 # Hook to create manpages from the perl files
 override_dh_installman:
